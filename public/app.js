@@ -220,6 +220,32 @@ function renderAlgorithms(algorithms) {
         </div>`;
     });
 
+    // AI检测详情（飓风算法专属）
+    let aiDetailsHtml = '';
+    if (algo.aiDetails) {
+      const ai = algo.aiDetails;
+      const aiColor = ai.aiLevel === 'high' ? 'var(--color-fail)' :
+                       ai.aiLevel === 'medium' ? 'var(--color-warn)' :
+                       ai.aiLevel === 'low' ? 'var(--color-warn)' : 'var(--color-pass)';
+      const aiLabel = ai.aiLevel === 'high' ? 'AI生成特征极强' :
+                       ai.aiLevel === 'medium' ? '疑似AI生成' :
+                       ai.aiLevel === 'low' ? '轻度AI特征' : '人类写作特征';
+      aiDetailsHtml = `
+        <div style="margin:12px 0;padding:14px;background:#f9f9f9;border-radius:8px;border-left:4px solid ${aiColor};">
+          <div style="font-size:14px;font-weight:600;margin-bottom:10px;color:${aiColor};">
+            AI内容检测详情 - ${aiLabel}
+          </div>
+          <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;font-size:12px;">
+            <div><span style="color:var(--text-secondary);">AI生成概率：</span><strong style="color:${aiColor};">${ai.aiProbability}%</strong></div>
+            <div><span style="color:var(--text-secondary);">套话模板命中：</span><strong>${ai.templateHits}处 (${ai.templateDensity}/千字)</strong></div>
+            <div><span style="color:var(--text-secondary);">信息密度：</span><strong>${ai.infoDensity}</strong></div>
+            <div><span style="color:var(--text-secondary);">具体数据密度：</span><strong>${ai.specificDensity}/千字</strong></div>
+            <div><span style="color:var(--text-secondary);">真实经验信号：</span><strong>${ai.experienceHits}处</strong></div>
+            <div><span style="color:var(--text-secondary);">AI等级：</span><strong style="color:${aiColor};">${ai.aiLevel}</strong></div>
+          </div>
+        </div>`;
+    }
+
     card.innerHTML = `
       <div class="algo-header">
         <span class="algo-name">${algo.name}</span>
@@ -233,6 +259,7 @@ function renderAlgorithms(algorithms) {
       </div>
       <div class="algo-details">
         <div class="algo-desc">${algo.description}</div>
+        ${aiDetailsHtml}
         ${findingsHtml}
       </div>`;
     grid.appendChild(card);
