@@ -1043,6 +1043,84 @@ function extractSpiderView($) {
 
 // ======================== robots.txt检测 ========================
 
+/**
+ * 解析 robots.txt 内容，判断百度蜘蛛是否被禁止抓取全站
+ * 正确逻辑：需要找到适用于 Baiduspider 或 * 的规则段，
+ * 在该段内检查是否存在 Disallow: /（禁止全站），同时考虑 Allow 规则的覆盖
+ */
+function parseRobotsTxtForBaidu(content) {
+  // 按 User-agent 分段解析
+  const lines = content.split('\n');
+  const groups = []; // 每个 group: { agents: [], rules: [] }
+  let currentGroup = null;
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    // 跳过注释和空行
+    if (!line || line.startsWith('#')) continue;
+
+    const agentMatch = line.match(/^User-agent:\s*(.+)$/i);
+    if (agentMatch) {
+      // 新的 User-agent 行，可能属于新段或延续当前段
+      const agent = agentMatch[1].trim();
+      if (!currentGroup || currentGroup._sealed) {
+        // 开始新段
+        currentGroup = { agents: [], rules: [], _sealed: false };
+        groups.push(currentGroup);
+      }
+      currentGroup.agents.push(agent);
+      continue;
+    }
+
+    // 非 User-agent 行出现时，当前段不再接受新 agent（进入规则区）
+    if (currentGroup) {
+      currentGroup._sealed = true;
+      const disallowMatch = line.match(/^Disallow:\s*(.*)$/i);
+      if (disallowMatch) {
+        currentGroup.rules.push({ type: 'disallow', path: disallowMatch[1].trim() });
+        continue;
+      }
+      const allowMatch = line.match(/^Allow:\s*(.*)$/i);
+      if (allowMatch) {
+        currentGroup.rules.push({ type: 'allow', path: allowMatch[1].trim() });
+        continue;
+      }
+      // Sitemap 等其他行忽略（不影响抓取判断）
+    }
+  }
+
+  // 查找适用于百度蜘蛛的规则
+  // 优先级：Baiduspider 专属段 > 通配段 (*) > 默认（无规则=允许）
+  let baiduGroup = groups.find(g => g.agents.some(a => /^Baiduspider/i.test(a)));
+  if (!baiduGroup) {
+    baiduGroup = groups.find(g => g.agents.some(a => a === '*'));
+  }
+
+  if (!baiduGroup) {
+    // 没有任何针对百度蜘蛛或通配的规则 → 默认允许
+    return { isDisallowed: false, hasBaiduRule: false, disallowPaths: [], allowPaths: [] };
+  }
+
+  const disallowPaths = baiduGroup.rules.filter(r => r.type === 'disallow').map(r => r.path);
+  const allowPaths = baiduGroup.rules.filter(r => r.type === 'allow').map(r => r.path);
+
+  // 判断是否全站禁止：Disallow: / 且没有更具体的 Allow: / 覆盖
+  // robots.txt 规则：更具体的路径规则优先（Allow: / 优先于 Disallow: / 不太常见，
+  // 但如果同时存在 Disallow: / 和 Allow: /，百度官方文档表示 Allow 优先级更高）
+  const hasFullDisallow = disallowPaths.some(p => p === '/');
+  const hasFullAllow = allowPaths.some(p => p === '/');
+
+  // 如果有 Disallow: / 但也有 Allow: /，Allow 优先（百度官方确认）
+  const isDisallowed = hasFullDisallow && !hasFullAllow;
+
+  return {
+    isDisallowed,
+    hasBaiduRule: true,
+    disallowPaths,
+    allowPaths,
+  };
+}
+
 async function checkRobotsTxt(targetUrl) {
   try {
     const u = new URL(targetUrl);
@@ -1054,17 +1132,20 @@ async function checkRobotsTxt(targetUrl) {
     });
     if (res.status === 200 && res.data) {
       const content = typeof res.data === 'string' ? res.data : String(res.data);
+      const parsed = parseRobotsTxtForBaidu(content);
       return {
         exists: true,
-        hasBaiduRule: /User-agent:\s*Baiduspider/i.test(content) || /User-agent:\s*\*/i.test(content),
-        isDisallowed: /Disallow:\s*\/\s*$/im.test(content),
+        hasBaiduRule: parsed.hasBaiduRule || /User-agent:\s*Baiduspider/i.test(content) || /User-agent:\s*\*/i.test(content),
+        isDisallowed: parsed.isDisallowed,
+        baiduDisallowPaths: parsed.disallowPaths,
+        baiduAllowPaths: parsed.allowPaths,
         hasSitemap: /Sitemap:/i.test(content),
-        content: content.substring(0,1000),
+        content: content.substring(0, 1000),
       };
     }
-    return { exists: false, hasBaiduRule: false, isDisallowed: false, hasSitemap: false };
+    return { exists: false, hasBaiduRule: false, isDisallowed: false, baiduDisallowPaths: [], baiduAllowPaths: [], hasSitemap: false };
   } catch(e) {
-    return { exists: false, hasBaiduRule: false, isDisallowed: false, hasSitemap: false, error: e.message };
+    return { exists: false, hasBaiduRule: false, isDisallowed: false, baiduDisallowPaths: [], baiduAllowPaths: [], hasSitemap: false, error: e.message };
   }
 }
 

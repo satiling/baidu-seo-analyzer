@@ -329,11 +329,32 @@ function renderRobotsInfo(info) {
 
   let statusHtml = '';
   if (info.isDisallowed) {
-    statusHtml = '<span class="algo-badge badge-fail">百度蜘蛛被禁止</span>';
+    statusHtml = '<span class="algo-badge badge-fail">百度蜘蛛被禁止抓取全站</span>';
   } else if (info.exists) {
-    statusHtml = '<span class="algo-badge badge-pass">robots.txt 已配置</span>';
+    const hasPaths = (info.baiduDisallowPaths && info.baiduDisallowPaths.length > 0);
+    statusHtml = hasPaths
+      ? `<span class="algo-badge badge-warn">百度蜘蛛部分目录受限</span>`
+      : '<span class="algo-badge badge-pass">百度蜘蛛可正常抓取</span>';
   } else {
     statusHtml = '<span class="algo-badge badge-warn">未找到 robots.txt</span>';
+  }
+
+  // 百度蜘蛛禁止/允许路径详情
+  let pathsHtml = '';
+  const disallowPaths = info.baiduDisallowPaths || [];
+  const allowPaths = info.baiduAllowPaths || [];
+  if (info.exists && (disallowPaths.length > 0 || allowPaths.length > 0)) {
+    const disallowItems = disallowPaths.map(p =>
+      `<span class="algo-badge badge-fail" style="font-size:12px;margin:2px;">禁止: ${escapeHtml(p || '(空=允许全部)')}</span>`
+    ).join('');
+    const allowItems = allowPaths.map(p =>
+      `<span class="algo-badge badge-pass" style="font-size:12px;margin:2px;">允许: ${escapeHtml(p)}</span>`
+    ).join('');
+    pathsHtml = `
+      <div style="margin-top:12px;padding:10px;background:#f9f9f9;border-radius:6px;">
+        <div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">百度蜘蛛适用规则：</div>
+        ${disallowItems}${allowItems}
+      </div>`;
   }
 
   let contentHtml = '';
@@ -357,9 +378,10 @@ function renderRobotsInfo(info) {
       </div>
       <div class="metric-item">
         <div class="metric-label">是否禁止抓取</div>
-        <div class="metric-value" style="color:${info.isDisallowed ? 'var(--color-fail)' : 'var(--color-pass)'}">${info.isDisallowed ? '禁止' : '允许'}</div>
+        <div class="metric-value" style="color:${info.isDisallowed ? 'var(--color-fail)' : 'var(--color-pass)'}">${info.isDisallowed ? '全站禁止' : '允许抓取'}</div>
       </div>
     </div>
+    ${pathsHtml}
     ${contentHtml}`;
 }
 
