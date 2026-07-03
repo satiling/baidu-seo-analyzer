@@ -1,0 +1,162 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background-color: #04060f;
+  color: #c8d4e8;
+  font-family: "Noto Sans SC", system-ui, sans-serif;
+  line-height: 1.6;
+  font-weight: 400;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+}
+
+/* 全局背景：网格 + 径向辉光 + 噪点 */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background-image: linear-gradient(rgba(31, 217, 255, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 217, 255, 0.04) 1px, transparent 1px);
+  background-size: 56px 56px;
+  pointer-events: none;
+  z-index: 0;
+  mask-image: radial-gradient(circle at 50% 0%, black, transparent 80%);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+      ellipse at 20% -10%,
+      rgba(0, 229, 255, 0.08),
+      transparent 50%
+    ),
+    radial-gradient(ellipse at 80% 0%, rgba(99, 102, 241, 0.08), transparent 55%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+/* 滚动条 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #070b1a;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(#1fd9ff, #008ba3);
+  border-radius: 0;
+  border: 2px solid #070b1a;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(#5decff, #00b8d4);
+}
+
+/* 选区颜色 */
+::selection {
+  background: rgba(0, 229, 255, 0.3);
+  color: #e6feff;
+}
+
+@layer components {
+  .panel {
+    @apply relative border border-radar-500/15 bg-void-800/60 backdrop-blur-sm;
+    background-image: linear-gradient(
+      180deg,
+      rgba(31, 217, 255, 0.03),
+      transparent 40%
+    );
+  }
+
+  .panel-corner {
+    @apply relative;
+  }
+  .panel-corner::before,
+  .panel-corner::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-color: rgba(31, 217, 255, 0.6);
+    border-style: solid;
+    pointer-events: none;
+  }
+  .panel-corner::before {
+    top: -1px;
+    left: -1px;
+    border-width: 1px 0 0 1px;
+  }
+  .panel-corner::after {
+    bottom: -1px;
+    right: -1px;
+    border-width: 0 1px 1px 0;
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-mono tracking-wide border;
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 px-6 py-3 font-display font-bold tracking-widest uppercase text-void-950 bg-radar-500 border border-radar-300 shadow-glow transition-all duration-200 hover:bg-radar-400 hover:shadow-glow active:translate-y-px;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2.5 font-mono text-sm tracking-wide text-radar-300 border border-radar-500/30 transition-all duration-200 hover:border-radar-400 hover:text-radar-100 hover:bg-radar-500/5;
+  }
+
+  .stat-num {
+    @apply font-display font-black tabular-nums;
+  }
+
+  .glitch {
+    text-shadow: 0 0 8px rgba(0, 229, 255, 0.5),
+      1px 0 0 rgba(255, 61, 90, 0.4), -1px 0 0 rgba(0, 230, 118, 0.4);
+  }
+}
+
+@layer utilities {
+  .text-gradient-radar {
+    background: linear-gradient(90deg, #5decff, #00e5ff 50%, #00b8d4);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .mask-fade-b {
+    -webkit-mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 70%, transparent 100%);
+  }
+
+  .scanline-overlay {
+    background: repeating-linear-gradient(
+      0deg,
+      rgba(0, 229, 255, 0.03) 0px,
+      rgba(0, 229, 255, 0.03) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+  }
+}
