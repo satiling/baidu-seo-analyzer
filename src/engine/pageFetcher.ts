@@ -171,6 +171,8 @@ export async function fetchPageContent(url: string, timeoutMs = 15000): Promise<
             : "text/html,application/xhtml+xml,*/*",
           "Cache-Control": "no-cache, no-store, must-revalidate",
           Pragma: "no-cache",
+          // jina.ai 服务端有内部缓存，加这个头强制实时抓取，绕过 jina 缓存
+          "X-No-Cache": "true",
         },
       });
       clearTimeout(timer);

@@ -11,7 +11,9 @@ function matchHurricane(f: PageFeatures, aiDetection?: AiDetectionResult): RuleH
 
   if (aiDetection) {
     // ============ 维度 1：AIGC 内容检测 ============
-    if (aiDetection.aiScore >= 60) {
+    // 飓风算法 4.0 核心：打击 AI 生成内容。百度蜘蛛判定不是 AI 才可以合规。
+    // 阈值：>=80 高度疑似 fail / 60-79 疑似 fail / 40-59 人机混合 warn / 20-39 轻度 AI 痕迹 warn / <20 pass
+    if (aiDetection.aiScore >= 80) {
       const topTemplates = aiDetection.matchedTemplates.slice(0, 3);
       const tplDetail = topTemplates.length
         ? topTemplates
@@ -20,22 +22,46 @@ function matchHurricane(f: PageFeatures, aiDetection?: AiDetectionResult): RuleH
         : "无明显套话但文本统计特征异常";
       hits.push({
         ruleId: "h-1",
-        ruleName:
-          aiDetection.aiScore >= 80 ? "AI 批量生成内容（高度疑似）" : "AI 生成内容风险（疑似）",
+        ruleName: "AI 批量生成内容（高度疑似）",
         severity: "high",
-        deduct: aiDetection.aiScore >= 80 ? 45 : 30,
-        evidence: `AIGC 文本检测 AI 概率 ${aiDetection.aiScore}/100，判定「${aiDetection.verdictLabel}」。命中证据：${tplDetail}。套话率 ${aiDetection.metrics.templateRate}%、困惑度 ${aiDetection.metrics.perplexity}、突发性 ${aiDetection.metrics.burstiness}、TTR ${aiDetection.metrics.ttr}。`,
+        deduct: 45,
+        evidence: `AIGC 文本检测 AI 概率 ${aiDetection.aiScore}/100，判定「${aiDetection.verdictLabel}」。命中证据：${tplDetail}。套话率 ${aiDetection.metrics.templateRate}%、困惑度 ${aiDetection.metrics.perplexity}、突发性 ${aiDetection.metrics.burstiness}、TTR ${aiDetection.metrics.ttr}。百度蜘蛛判定为 AI 生成内容，飓风算法 4.0 直接降权。`,
         suggestion:
           "本文本被判定为 AI 生成。请重写为人工原创：增加独家观点、实测数据、个人案例、口语化表达，删除套话模板句，长短句交替，使用具体数字替代空泛形容词。",
+      });
+    } else if (aiDetection.aiScore >= 60) {
+      const topTemplates = aiDetection.matchedTemplates.slice(0, 3);
+      const tplDetail = topTemplates.length
+        ? topTemplates
+            .map((t) => `「${CATEGORY_LABEL[t.category]?.label || t.category}：${t.pattern}」×${t.occurrence}`)
+            .join("、")
+        : "无明显套话但文本统计特征异常";
+      hits.push({
+        ruleId: "h-1",
+        ruleName: "AI 生成内容（疑似）",
+        severity: "high",
+        deduct: 35,
+        evidence: `AIGC 文本检测 AI 概率 ${aiDetection.aiScore}/100，判定「${aiDetection.verdictLabel}」。命中证据：${tplDetail}。套话率 ${aiDetection.metrics.templateRate}%、困惑度 ${aiDetection.metrics.perplexity}、突发性 ${aiDetection.metrics.burstiness}。百度蜘蛛判定为 AI 生成内容，飓风算法 4.0 降权处理。`,
+        suggestion:
+          "本文本被判定为 AI 生成。请重写为人工原创：增加独家观点、实测数据、个人案例、口语化表达，删除套话模板句。",
       });
     } else if (aiDetection.aiScore >= 40) {
       hits.push({
         ruleId: "h-1",
         ruleName: "人机混合内容风险",
         severity: "mid",
-        deduct: 15,
-        evidence: `AIGC 文本检测 AI 概率 ${aiDetection.aiScore}/100，判定「${aiDetection.verdictLabel}」。文本存在部分 AI 痕迹：套话率 ${aiDetection.metrics.templateRate}%、连接词密度 ${aiDetection.metrics.connectorRate}。`,
+        deduct: 25,
+        evidence: `AIGC 文本检测 AI 概率 ${aiDetection.aiScore}/100，判定「${aiDetection.verdictLabel}」。文本存在明显 AI 痕迹：套话率 ${aiDetection.metrics.templateRate}%、连接词密度 ${aiDetection.metrics.connectorRate}。百度蜘蛛会标记为低质风险内容。`,
         suggestion: "文本部分像 AI 生成。请检查标注的套话句并人工改写，增加原创观点与具体案例。",
+      });
+    } else if (aiDetection.aiScore >= 20) {
+      hits.push({
+        ruleId: "h-1",
+        ruleName: "轻度 AI 痕迹",
+        severity: "mid",
+        deduct: 18,
+        evidence: `AIGC 文本检测 AI 概率 ${aiDetection.aiScore}/100，判定「${aiDetection.verdictLabel}」。文本存在轻度 AI 痕迹：套话率 ${aiDetection.metrics.templateRate}%、命中模板 ${aiDetection.stats.templateCount} 处。百度蜘蛛未明确判定为 AI 生成，但存在低质风险信号，排名会受影响。`,
+        suggestion: "文本有轻度 AI 痕迹。删除残留套话句，增加自然口语化表达与独家观点，确保百度蜘蛛判定为人工原创。",
       });
     }
 
@@ -416,8 +442,18 @@ export function matchAllRules(f: PageFeatures, aiDetection?: AiDetectionResult):
     const totalDeduct = hits.reduce((sum, h) => sum + h.deduct, 0);
     const score = Math.max(0, 100 - totalDeduct);
     let status: AlgorithmDiagnosis["status"] = "pass";
-    if (score < 60) status = "fail";
-    else if (score < 80) status = "warn";
+
+    // === 飓风算法特殊规则 ===
+    // 只要检测到 AI 生成内容（h-1 命中），无论 AI Score 高低，飓风算法一律判 fail。
+    // 依据：百度飓风算法 4.0 核心打击 AI 批量生成内容，"百度蜘蛛判定不是 AI 才可以"合规。
+    // 任何 AI 痕迹 = 飓风违规 = 站点降权，不应被其他维度稀释。
+    if (meta.id === "hurricane" && hits.some((h) => h.ruleId === "h-1")) {
+      status = "fail";
+    } else if (score < 60) {
+      status = "fail";
+    } else if (score < 80) {
+      status = "warn";
+    }
     return {
       algorithmId: meta.id,
       algorithmName: `${meta.name} ${meta.version}`,
